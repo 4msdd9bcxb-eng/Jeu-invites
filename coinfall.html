@@ -5,26 +5,14 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title></title>
   <style>
-    html, body {
-      margin:0;
-      height:100%;
-      background:#000;
-      overflow:hidden;
-    }
+    html, body { margin:0; height:100%; background:#000; overflow:hidden; }
     pre{
-      margin:0;
-      width:100%;
-      height:100%;
-      padding:12px;
-      box-sizing:border-box;
-      color:#e6e6e6;
-      background:#000;
+      margin:0; width:100%; height:100%;
+      padding:12px; box-sizing:border-box;
+      color:#e6e6e6; background:#000;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size:16px;
-      line-height:1.05;
-      white-space:pre;
-      user-select:none;
-      -webkit-user-select:none;
+      font-size:16px; line-height:1.05; white-space:pre;
+      user-select:none; -webkit-user-select:none;
       -webkit-tap-highlight-color: transparent;
     }
   </style>
@@ -33,219 +21,235 @@
 <pre id="screen"></pre>
 
 <script>
-/* ===== Accès ===== */
-if (localStorage.getItem("coin_access") !== "ok") {
-  window.location.href = "index.html";
-}
-
-const screenEl = document.getElementById("screen");
-
-/* ===== Dimensions (mobile-first) ===== */
-function computeSize(){
-  const W = Math.max(44, Math.min(76, Math.floor(window.innerWidth / 9)));
-  const H = Math.max(20, Math.min(34, Math.floor(window.innerHeight / 18)));
-  return {W, H};
-}
-let {W, H} = computeSize();
-window.addEventListener("resize", ()=>{ ({W,H}=computeSize()); init(); });
-
-/* ===== Police ASCII ===== */
-const FONT = {
-  "B":[ "#### ","#   #","#   #","#### ","#   #","#   #","#### " ],
-  "R":[ "#### ","#   #","#   #","#### ","#  # ","#   #","#   #" ],
-  "A":[ " ### ","#   #","#   #","#####","#   #","#   #","#   #" ],
-  "V":[ "#   #","#   #","#   #","#   #","#   #"," # # ","  #  " ],
-  "O":[ " #### ","#    #","#    #","#    #","#    #","#    #"," #### " ],
-  " ":[ "  ","  ","  ","  ","  ","  ","  " ]
-};
-
-const WORD = "BRAVO";
-const GLYPH_H = 7;
-
-/* ===== Pièces ===== */
-const coins = ["o","O","0","$","¢","*"];
-const weights = [6,3,3,2,1,2];
-function pickCoin(){
-  const sum = weights.reduce((a,b)=>a+b,0);
-  let r = Math.random()*sum;
-  for (let i=0;i<coins.length;i++){
-    r -= weights[i];
-    if (r<=0) return coins[i];
-  }
-  return "o";
-}
-
-/* ===== Animation ===== */
-const BUILD_SECONDS = 15;
-const FRAME_MS = 60;
-const TOTAL_FRAMES = Math.round((BUILD_SECONDS * 1000) / FRAME_MS);
-
-let frame = 0;
-let drops = [];
-let mask = [];
-let fillOrder = [];
-let filledSet = new Set();
-let buildDone = false;
-
-const FINAL_MESSAGE_1 = "🎁 Joyeux Noel!🎁 
-const FINAL_MESSAGE_2 = " -> Nous vous aimons très fort! <-";
-const FINAL_MESSAGE_3 = "🎁 Votre cadeau est dans le sapin! 🎁";
-
-const MAX_DROPS = 900;
-let spawnRateBase = 0.004;
-let spawnRateTarget = 0.18;
-
-function keyXY(x,y){ return x + "," + y; }
-
-function buildMask(){
-  let charSp = 2;
-
-  const makeLines = (sp) => {
-    const lines = Array.from({length: GLYPH_H}, ()=>"");
-    for (const ch of WORD){
-      const g = FONT[ch] || FONT[" "];
-      for (let i=0;i<GLYPH_H;i++){
-        lines[i] += g[i] + " ".repeat(sp);
-      }
-    }
-    return lines;
-  };
-
-  let lines = makeLines(charSp);
-  while (lines[0].length > W && charSp > 0){
-    charSp--;
-    lines = makeLines(charSp);
-  }
-
-  const wordWidth = lines[0].length;
-  const left = Math.max(0, Math.floor((W - wordWidth)/2));
-  const top  = Math.max(2, Math.floor((H - GLYPH_H)/3));
-
-  mask = [];
-  for (let y=0;y<GLYPH_H;y++){
-    for (let x=0;x<lines[y].length;x++){
-      if (lines[y][x] === "#"){
-        const gx = left + x;
-        const gy = top + y;
-        if (gx>=0 && gx<W && gy>=0 && gy<H){
-          mask.push({x:gx, y:gy});
-        }
-      }
-    }
-  }
-
-  fillOrder = mask.slice().sort((a,b)=> (a.y-b.y) || (a.x-b.x));
-  filledSet = new Set();
-}
-
-function init(){
-  ({W,H}=computeSize());
-  frame = 0;
-  drops = [];
-  buildDone = false;
-  buildMask();
-  render();
-}
-
-function spawn(){
-  const targetFilledCount = Math.min(
-    fillOrder.length,
-    Math.floor((frame / TOTAL_FRAMES) * fillOrder.length)
-  );
-
-  for (let i=0;i<targetFilledCount;i++){
-    const p = fillOrder[i];
-    filledSet.add(keyXY(p.x,p.y));
-  }
-
-  if (frame >= TOTAL_FRAMES){
-    buildDone = true;
+(() => {
+  // Accès
+  if (localStorage.getItem("coin_access") !== "ok") {
+    window.location.href = "index.html";
     return;
   }
 
-  for (let x=0; x<W; x++){
-    if (Math.random() < spawnRateBase){
-      drops.push({x, y:0, ch: pickCoin(), vy: 1.0 + Math.random()*0.6});
+  const screenEl = document.getElementById("screen");
+
+  // Dimensions console (mobile-friendly)
+  function computeSize(){
+    const W = Math.max(44, Math.min(80, Math.floor(window.innerWidth / 9)));
+    const H = Math.max(20, Math.min(36, Math.floor(window.innerHeight / 18)));
+    return {W, H};
+  }
+  let {W, H} = computeSize();
+  window.addEventListener("resize", ()=>{ ({W,H}=computeSize()); init(); });
+
+  // Police 7 lignes
+  const FONT = {
+    "B":[ "#### ","#   #","#   #","#### ","#   #","#   #","#### " ],
+    "R":[ "#### ","#   #","#   #","#### ","#  # ","#   #","#   #" ],
+    "A":[ " ### ","#   #","#   #","#####","#   #","#   #","#   #" ],
+    "V":[ "#   #","#   #","#   #","#   #","#   #"," # # ","  #  " ],
+    "O":[ " #### ","#    #","#    #","#    #","#    #","#    #"," #### " ],
+    " ":[ "  ","  ","  ","  ","  ","  ","  " ]
+  };
+
+  const WORD = "BRAVO";
+  const GLYPH_H = 7;
+
+  // Coins
+  const coins = ["o","O","0","$","¢","*"];
+  const weights = [6,3,3,2,1,2];
+  function pickCoin(){
+    const sum = weights.reduce((a,b)=>a+b,0);
+    let r = Math.random()*sum;
+    for (let i=0;i<coins.length;i++){
+      r -= weights[i];
+      if (r<=0) return coins[i];
     }
+    return "o";
   }
 
-  const t = frame / TOTAL_FRAMES;
-  const targetIntensity = spawnRateTarget * (1 - t) + 0.02;
+  // Animation timing
+  const BUILD_SECONDS = 15;
+  const FRAME_MS = 60;
+  const TOTAL_FRAMES = Math.max(1, Math.round((BUILD_SECONDS * 1000) / FRAME_MS));
 
-  const remaining = fillOrder.length - targetFilledCount;
-  const samples = Math.min(18, Math.max(6, Math.floor(remaining / 10)));
+  // Final text (3 lignes)
+  const FINAL_MESSAGE_1 = "🎁 Joyeux Noël! 🎁";
+  const FINAL_MESSAGE_2 = "-> Nous vous aimons très fort! <-";
+  const FINAL_MESSAGE_3 = "🎁 Votre cadeau est dans le sapin! 🎁";
 
-  for (let s=0; s<samples; s++){
-    const idx = targetFilledCount + Math.floor(Math.random() * Math.max(1, remaining));
-    const p = fillOrder[Math.min(idx, fillOrder.length-1)];
-    if (Math.random() < targetIntensity){
-      drops.push({x: p.x, y:0, ch: pickCoin(), vy: 1.1 + Math.random()*0.7});
+  // State
+  let frame = 0;
+  let drops = [];
+  let fillOrder = [];
+  let filledSet = new Set();
+  let buildDone = false;
+
+  const MAX_DROPS = 900;
+  const spawnRateBase = 0.004;
+  const spawnRateTarget = 0.18;
+
+  const keyXY = (x,y)=> x + "," + y;
+
+  function buildMask(){
+    // Adaptation pour que le mot rentre toujours:
+    // 1) réduire l'espacement
+    // 2) si encore trop large, compacter horizontalement (skip 1 colonne sur 2)
+    let charSp = 2;
+    let xScale = 1; // 1 = normal, 2 = compact
+
+    function makeLines(sp){
+      const lines = Array.from({length: GLYPH_H}, ()=>"");
+      for (const ch of WORD){
+        const g = FONT[ch] || FONT[" "];
+        for (let i=0;i<GLYPH_H;i++) lines[i] += g[i] + " ".repeat(sp);
+      }
+      return lines;
     }
+
+    let lines = makeLines(charSp);
+    while (lines[0].length > W && charSp > 0){
+      charSp--;
+      lines = makeLines(charSp);
+    }
+    if (lines[0].length > W) xScale = 2;
+
+    const wordWidth = Math.ceil(lines[0].length / xScale);
+    const left = Math.max(0, Math.floor((W - wordWidth) / 2));
+    const top  = Math.max(2, Math.floor((H - GLYPH_H) / 3));
+
+    const mask = [];
+    for (let y=0;y<GLYPH_H;y++){
+      let gx = 0;
+      for (let x=0;x<lines[y].length;x+=xScale){
+        if (lines[y][x] === "#"){
+          const px = left + gx;
+          const py = top + y;
+          if (px>=0 && px<W && py>=0 && py<H) mask.push({x:px, y:py});
+        }
+        gx++;
+      }
+    }
+
+    // Fallback minimal si jamais c’est vide (évite crash)
+    if (mask.length === 0) {
+      mask.push({x: Math.floor(W/2), y: Math.floor(H/2)});
+    }
+
+    fillOrder = mask.slice().sort((a,b)=> (a.y-b.y) || (a.x-b.x));
+    filledSet = new Set();
   }
 
-  if (drops.length > MAX_DROPS) drops.splice(0, drops.length - MAX_DROPS);
-}
-
-function step(){
-  if (!buildDone){
-    spawn();
-
-    for (const d of drops){
-      d.y += d.vy;
-      if (d.y > H-1) d.y = H-1;
-    }
-
-    drops = drops.filter(d => d.y < H-1);
-
-    render();
-    frame++;
-    setTimeout(step, FRAME_MS);
-  } else {
+  function init(){
+    ({W,H}=computeSize());
+    frame = 0;
     drops = [];
-    render(); // affichage final figé
+    buildDone = false;
+    buildMask();
+    render();
+    // relance la boucle (évite multiples boucles en resize)
+    if (init._timer) clearTimeout(init._timer);
   }
-}
 
-function render(){
-  const buf = Array.from({length:H}, ()=>Array(W).fill(" "));
+  function spawnAndAdvance(){
+    const targetFilledCount = Math.min(
+      fillOrder.length,
+      Math.floor((frame / TOTAL_FRAMES) * fillOrder.length)
+    );
 
-  for (const d of drops){
-    const x = Math.round(d.x), y = Math.round(d.y);
-    if (x>=0 && x<W && y>=0 && y<H){
-      buf[y][x] = d.ch;
+    for (let i=0;i<targetFilledCount;i++){
+      const p = fillOrder[i];
+      filledSet.add(keyXY(p.x,p.y));
+    }
+
+    if (frame >= TOTAL_FRAMES){
+      buildDone = true;
+      return;
+    }
+
+    // background rain
+    for (let x=0; x<W; x++){
+      if (Math.random() < spawnRateBase){
+        drops.push({x, y:0, ch: pickCoin(), vy: 1.0 + Math.random()*0.6});
+      }
+    }
+
+    // targeted rain
+    const t = frame / TOTAL_FRAMES;
+    const targetIntensity = spawnRateTarget * (1 - t) + 0.02;
+
+    const remaining = Math.max(1, fillOrder.length - targetFilledCount);
+    const samples = Math.min(18, Math.max(6, Math.floor(remaining / 10)));
+
+    for (let s=0; s<samples; s++){
+      const idx = targetFilledCount + Math.floor(Math.random() * remaining);
+      const p = fillOrder[Math.min(idx, fillOrder.length-1)];
+      if (Math.random() < targetIntensity){
+        drops.push({x: p.x, y:0, ch: pickCoin(), vy: 1.1 + Math.random()*0.7});
+      }
+    }
+
+    if (drops.length > MAX_DROPS) drops.splice(0, drops.length - MAX_DROPS);
+  }
+
+  function step(){
+    if (!buildDone){
+      spawnAndAdvance();
+
+      for (const d of drops){
+        d.y += d.vy;
+      }
+      drops = drops.filter(d => d.y < H);
+
+      render();
+      frame++;
+      init._timer = setTimeout(step, FRAME_MS);
+    } else {
+      drops = [];
+      render(); // figé
     }
   }
 
-  for (const p of fillOrder){
-    if (filledSet.has(keyXY(p.x,p.y))){
-      buf[p.y][p.x] = "$";
+  function writeCentered(buf, y, text){
+    if (y < 0 || y >= H) return;
+    const x0 = Math.max(0, Math.floor((W - text.length)/2));
+    for (let i=0;i<text.length && (x0+i)<W;i++){
+      buf[y][x0+i] = text[i];
     }
   }
 
-  if (buildDone){
-    const maxY = Math.max(...fillOrder.map(p => p.y));
-    const y1 = Math.min(H-3, maxY + 2);
-    const y2 = Math.min(H-2, y1 + 1);
+  function render(){
+    const buf = Array.from({length:H}, ()=>Array(W).fill(" "));
 
-    const x1 = Math.max(0, Math.floor((W - FINAL_MESSAGE_1.length)/2));
-    const x2 = Math.max(0, Math.floor((W - FINAL_MESSAGE_2.length)/2));
-    const x3 = Math.max(0, Math.floor((W - FINAL_MESSAGE_3.length)/2));
+    // drops
+    for (const d of drops){
+      const x = Math.round(d.x), y = Math.round(d.y);
+      if (x>=0 && x<W && y>=0 && y<H) buf[y][x] = d.ch;
+    }
 
-    for (let i=0;i<FINAL_MESSAGE_1.length && x1+i < W;i++){
-      buf[y1][x1+i] = FINAL_MESSAGE_1[i];
+    // word
+    for (const p of fillOrder){
+      if (filledSet.has(keyXY(p.x,p.y))){
+        buf[p.y][p.x] = "$";
+      }
     }
-    for (let i=0;i<FINAL_MESSAGE_2.length && x2+i < W;i++){
-      buf[y2][x2+i] = FINAL_MESSAGE_2[i];
-    for (let i=0;i<FINAL_MESSAGE_3.length && x3+i < W;i++){
-      buf[y3][x3+i] = FINAL_MESSAGE_3[i];
+
+    // final text (3 lignes)
+    if (buildDone){
+      const maxY = Math.max(...fillOrder.map(p=>p.y));
+      const y1 = Math.min(H-4, maxY + 2);
+      const y2 = Math.min(H-3, y1 + 1);
+      const y3 = Math.min(H-2, y2 + 1);
+
+      writeCentered(buf, y1, FINAL_MESSAGE_1);
+      writeCentered(buf, y2, FINAL_MESSAGE_2);
+      writeCentered(buf, y3, FINAL_MESSAGE_3);
     }
+
+    screenEl.textContent = buf.map(r=>r.join("")).join("\n");
   }
 
-  screenEl.textContent = buf.map(r=>r.join("")).join("\n");
-}
-
-init();
-step();
+  // start
+  init();
+  step();
+})();
 </script>
 </body>
 </html>

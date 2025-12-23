@@ -86,6 +86,7 @@
     let fillOrder = [];
     let filledSet = new Set();
     let buildDone = false;
+const FINAL_MESSAGE = "Vas-y, déballe le prochain cadeau!";
 
     const MAX_DROPS = 900;
     let spawnRateBase = 0.004;
@@ -205,20 +206,39 @@
     }
 
     function render(){
-      const buf = Array.from({length:H}, ()=>Array(W).fill(" "));
+  const buf = Array.from({length:H}, ()=>Array(W).fill(" "));
 
-      for (const d of drops){
-        const x = Math.round(d.x), y = Math.round(d.y);
-        if (x>=0 && x<W && y>=0 && y<H){
-          buf[y][x] = d.ch;
-        }
-      }
+  // Coins en chute (derrière)
+  for (const d of drops){
+    const x = Math.round(d.x), y = Math.round(d.y);
+    if (x>=0 && x<W && y>=0 && y<H){
+      buf[y][x] = d.ch;
+    }
+  }
 
-      for (const p of fillOrder){
-        if (filledSet.has(keyXY(p.x,p.y))){
-          buf[p.y][p.x] = "$";
-        }
-      }
+  // Mot BIDOU (au premier plan)
+  for (const p of fillOrder){
+    if (filledSet.has(keyXY(p.x,p.y))){
+      buf[p.y][p.x] = "$";
+    }
+  }
+
+  // 👉 MESSAGE FINAL (SEULEMENT À LA FIN)
+  if (buildDone){
+    const msg = FINAL_MESSAGE;
+    const msgY = Math.min(H - 2, Math.max(0, Math.floor(
+      Math.max(...fillOrder.map(p => p.y)) + 2
+    )));
+    const msgX = Math.max(0, Math.floor((W - msg.length) / 2));
+
+    for (let i=0; i<msg.length && msgX + i < W; i++){
+      buf[msgY][msgX + i] = msg[i];
+    }
+  }
+
+  screenEl.textContent = buf.map(r=>r.join("")).join("\n");
+}
+
 
       screenEl.textContent = buf.map(r=>r.join("")).join("\n");
     }

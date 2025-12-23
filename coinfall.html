@@ -3,93 +3,63 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>BIDOUX – Pluie de sous</title>
+  <title></title>
   <style>
-    :root{
-      --bg:#0b1220; --panel:#111a2e; --line:#223055; --ink:#eaf0ff; --btn:#0b1220; --btnLine:#2a3c6b;
-    }
-    body{
-      margin:0; background:var(--bg); color:var(--ink);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      min-height:100vh; display:flex; flex-direction:column;
-    }
-    header{
-      padding:12px; display:flex; flex-direction:column; gap:10px;
-      border-bottom:1px solid var(--line); background:var(--panel);
-    }
-    .top{
-      display:flex; align-items:center; justify-content:space-between; gap:10px;
-    }
-    .title{font-weight:800; font-size:15px;}
-    .controls{
-      display:flex; gap:8px; flex-wrap:wrap;
-    }
-    .btn{
-      border:1px solid var(--btnLine); background:var(--btn); color:var(--ink);
-      padding:10px 12px; border-radius:12px; cursor:pointer;
-      font-weight:700; font-size:14px;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .btn:active{transform:scale(.98)}
-    .wrap{flex:1; display:flex; align-items:stretch; justify-content:center; padding:10px;}
+    html, body { margin:0; height:100%; background:#000; overflow:hidden; }
     pre{
-      margin:0; width:100%;
-      max-width: 720px;
-      border:1px solid var(--line); border-radius:14px;
+      margin:0;
+      width:100%;
+      height:100%;
       padding:12px;
+      box-sizing:border-box;
+      color:#e6e6e6;
+      background:#000;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size:16px;       /* lisible iPhone */
       line-height:1.05;
-      font-size: 16px;      /* 👈 mobile-first */
-      overflow:hidden;
       white-space:pre;
       user-select:none;
-      box-shadow:0 10px 30px rgba(0,0,0,.35);
-    }
-    .hint{
-      opacity:.7; font-size:12px; padding:0 12px 12px;
+      -webkit-user-select:none;
+      -webkit-tap-highlight-color: transparent;
     }
   </style>
 </head>
 <body>
-  <header>
-    <div class="top">
-      <div class="title">💰 BIDOUX (pluie de sous)</div>
-      <button class="btn" id="lock">Verrouiller</button>
-    </div>
-    <div class="controls">
-      <button class="btn" id="speedDown">- vitesse</button>
-      <button class="btn" id="speedUp">+ vitesse</button>
-      <button class="btn" id="toggle">Pause</button>
-      <button class="btn" id="less">Moins</button>
-      <button class="btn" id="more">Plus</button>
-    </div>
-  </header>
-
-  <div class="wrap">
-    <pre id="screen"></pre>
-  </div>
-  <div class="hint">Mobile-first : lisible sur iPhone. (Boutons seulement, pas besoin de clavier)</div>
+  <pre id="screen"></pre>
 
   <script>
-    // Accès (statique, côté navigateur)
+    // Accès (statique côté navigateur)
     if (localStorage.getItem("coin_access") !== "ok") {
       window.location.href = "index.html";
     }
 
     const screenEl = document.getElementById("screen");
 
-    // 👇 Mobile-first : on limite volontairement la largeur en caractères
+    // --- Dimensions "console" (mobile-first) ---
     function computeSize(){
-      // largeur en "caractères" approximée à partir du viewport
-      const wChars = Math.max(44, Math.min(70, Math.floor(window.innerWidth / 9))); // iPhone ≈ 44-52
-      const hLines = Math.max(20, Math.min(32, Math.floor((window.innerHeight - 180) / 18)));
-      return {W:wChars, H:hLines};
+      const W = Math.max(44, Math.min(70, Math.floor(window.innerWidth / 9)));
+      const H = Math.max(20, Math.min(34, Math.floor(window.innerHeight / 18)));
+      return {W, H};
     }
-    let {W,H} = computeSize();
-    window.addEventListener("resize", ()=>{ ({W,H}=computeSize()); rebuild(); });
+    let {W, H} = computeSize();
+    window.addEventListener("resize", ()=>{ ({W,H}=computeSize()); init(); });
 
-    // Pièces (simples, très lisibles)
-    const coins = ["o","O","0","$","¢"];
-    const weights = [6,3,3,2,1];
+    // --- Mot à construire ---
+    // Police 7 lignes en pixels (#)
+    const FONT = {
+      "B":[ "#### ","#   #","#   #","#### ","#   #","#   #","#### " ],
+      "I":[ "#####","  #  ","  #  ","  #  ","  #  ","  #  ","#####" ],
+      "D":[ "#### ","#   #","#   #","#   #","#   #","#   #","#### " ],
+      "O":[ " #### ","#    #","#    #","#    #","#    #","#    #"," #### " ],
+      " ":[ "  ","  ","  ","  ","  ","  ","  " ]
+    };
+    const WORD = "BIDOU";        // <-- BIDOU (comme demandé)
+    const CHAR_SP = 2;
+    const GLYPH_H = 7;
+
+    // --- Pièces ASCII ---
+    const coins = ["o","O","0","$","¢","*"];
+    const weights = [6,3,3,2,1,2];
     function pickCoin(){
       const sum = weights.reduce((a,b)=>a+b,0);
       let r = Math.random()*sum;
@@ -100,179 +70,159 @@
       return "o";
     }
 
-    // Police 7 lignes : BIDOUX (pixels)
-    const FONT = {
-      "B":[ "#### ","#   #","#   #","#### ","#   #","#   #","#### " ],
-      "I":[ "#####","  #  ","  #  ","  #  ","  #  ","  #  ","#####" ],
-      "D":[ "#### ","#   #","#   #","#   #","#   #","#   #","#### " ],
-      "O":[ " #### ","#    #","#    #","#    #","#    #","#    #"," #### " ],
-      "U":[ "#   #","#   #","#   #","#   #","#   #","#   #"," ### " ],
-      "X":[ "#   #"," # # ","  #  ","  #  ","  #  "," # # ","#   #" ],
-      " ":[ "  ","  ","  ","  ","  ","  ","  " ]
-    };
-    const WORD = "BIDOUX";
-    const CHAR_SP = 2;
-    const targetHeight = 7;
+    // --- Animation ---
+    // Objectif: construire sur ~30s, puis arrêter complètement.
+    const BUILD_SECONDS = 30;
+    const FRAME_MS = 60;                      // ~16 fps
+    const TOTAL_FRAMES = Math.round((BUILD_SECONDS * 1000) / FRAME_MS);
 
-    let targetMask = [];
-    let targetCols = [];
-    let filled = new Map(); // "x,y" -> ttl
-    const keyXY = (x,y)=>x+","+y;
+    let frame = 0;
+    let drops = [];                           // {x,y,ch,vy}
+    let mask = [];                            // pixels à remplir: {x,y}
+    let fillOrder = [];                       // ordre de remplissage des pixels
+    let filledSet = new Set();                // "x,y" remplis
+    let buildDone = false;
 
-    // Animation
-    let drops = []; // {x,y,ch,vy}
-    let frameMs = 85;          // 👈 mobile-first : un peu plus lent, plus stable
-    let paused = false;
+    // Réduit le “bruit” et la charge
+    const MAX_DROPS = 900;
+    let spawnRateBase = 0.004;                // fond très léger
+    let spawnRateTarget = 0.18;               // pluie ciblée (diminue au fur et à mesure)
 
-    // Intensités (ajustables par boutons)
-    let backgroundRain = 0.010; // léger
-    let targetRainBoost = 0.18; // fort sur le mot
+    function keyXY(x,y){ return x + "," + y; }
 
     function buildMask(){
-      const lines = Array.from({length: targetHeight}, ()=>"");
+      const lines = Array.from({length: GLYPH_H}, ()=>"");
       for (const ch of WORD){
-        const g = FONT[ch];
-        for (let i=0;i<targetHeight;i++){
+        const g = FONT[ch] || FONT[" "];
+        for (let i=0;i<GLYPH_H;i++){
           lines[i] += g[i] + " ".repeat(CHAR_SP);
         }
       }
       const wordWidth = lines[0].length;
 
-      const targetLeft = Math.max(0, Math.floor((W - wordWidth)/2));
-      const targetTop  = Math.max(2, Math.floor((H - targetHeight)/3));
+      const left = Math.max(0, Math.floor((W - wordWidth)/2));
+      const top  = Math.max(2, Math.floor((H - GLYPH_H)/3));
 
-      targetMask = [];
-      const colsSet = new Set();
-
-      for (let y=0;y<targetHeight;y++){
+      mask = [];
+      for (let y=0;y<GLYPH_H;y++){
         for (let x=0;x<lines[y].length;x++){
           if (lines[y][x] === "#"){
-            const gx = targetLeft + x;
-            const gy = targetTop + y;
-            if (gx>=0 && gx<W && gy>=0 && gy<H-1){
-              targetMask.push({x:gx, y:gy});
-              colsSet.add(gx);
+            const gx = left + x;
+            const gy = top + y;
+            if (gx>=0 && gx<W && gy>=0 && gy<H){
+              mask.push({x:gx, y:gy});
             }
           }
         }
       }
-      targetCols = [...colsSet];
+
+      // Ordre de construction : de haut en bas, gauche à droite (plus "logique" visuellement)
+      fillOrder = mask.slice().sort((a,b)=> (a.y-b.y) || (a.x-b.x));
+      filledSet = new Set();
     }
 
-    function rebuild(){
+    function init(){
+      ({W,H}=computeSize());
+      frame = 0;
       drops = [];
-      filled.clear();
+      buildDone = false;
       buildMask();
+      render(); // écran vide au départ
     }
-    rebuild();
 
     function spawn(){
-      // Fond
-      for (let x=0;x<W;x++){
-        if (Math.random() < backgroundRain){
-          drops.push({x, y:0, ch: pickCoin(), vy: 0.95 + Math.random()*0.55});
+      // Le mot se construit : on augmente progressivement le nombre de pixels remplis
+      const targetFilledCount = Math.min(
+        fillOrder.length,
+        Math.floor((frame / TOTAL_FRAMES) * fillOrder.length)
+      );
+
+      // Marque les pixels "construits"
+      for (let i=0;i<targetFilledCount;i++){
+        const p = fillOrder[i];
+        filledSet.add(keyXY(p.x,p.y));
+      }
+
+      // Si build terminé : stop total de la pluie
+      if (frame >= TOTAL_FRAMES){
+        buildDone = true;
+        return;
+      }
+
+      // Pluie légère de fond
+      for (let x=0; x<W; x++){
+        if (Math.random() < spawnRateBase){
+          drops.push({x, y:0, ch: pickCoin(), vy: 1.0 + Math.random()*0.6});
         }
       }
-      // Colonnes du mot
-      for (const x of targetCols){
-        if (Math.random() < targetRainBoost){
-          drops.push({x, y:0, ch: pickCoin(), vy: 1.00 + Math.random()*0.70});
+
+      // Pluie ciblée sur les colonnes des pixels non encore construits (accélère la perception)
+      // Plus on approche de la fin, plus on diminue la pluie.
+      const t = frame / TOTAL_FRAMES;
+      const targetIntensity = spawnRateTarget * (1 - t) + 0.02; // décroît vers la fin
+
+      // On échantillonne quelques pixels pas encore remplis et on fait tomber des coins dans leurs colonnes
+      const remaining = fillOrder.length - targetFilledCount;
+      const samples = Math.min(18, Math.max(6, Math.floor(remaining / 10)));
+
+      for (let s=0; s<samples; s++){
+        const idx = targetFilledCount + Math.floor(Math.random() * Math.max(1, remaining));
+        const p = fillOrder[Math.min(idx, fillOrder.length-1)];
+        if (Math.random() < targetIntensity){
+          drops.push({x: p.x, y:0, ch: pickCoin(), vy: 1.1 + Math.random()*0.7});
         }
       }
-      if (drops.length > 1200) drops.splice(0, drops.length - 1200);
+
+      if (drops.length > MAX_DROPS) drops.splice(0, drops.length - MAX_DROPS);
     }
 
     function step(){
-      if (!paused){
+      if (!buildDone){
         spawn();
 
+        // Avance les coins
         for (const d of drops){
           d.y += d.vy;
-          if (d.y > H-2){
-            d.y = H-2;
-            d.vy = 0;
-          }
-          // Si ça passe sur un pixel du mot, on “allume” ce pixel
-          const x = Math.round(d.x);
-          const y = Math.round(d.y);
-          const k = keyXY(x,y);
-          // On ne check que si on est dans la zone (simple et rapide)
-          if (filled.has(k) || false){
-            // déjà allumé -> rallume
-            filled.set(k, 14);
-          }
+          if (d.y > H-1) d.y = H-1;
         }
 
-        // Garantit lisibilité : rallume quelques pixels aléatoires à chaque frame
-        for (let i=0;i<6;i++){
-          const p = targetMask[Math.floor(Math.random()*targetMask.length)];
-          filled.set(keyXY(p.x,p.y), 14 + (Math.random()*10|0));
-        }
-
-        // TTL
-        for (const [k, ttl] of filled){
-          if (ttl <= 1) filled.delete(k);
-          else filled.set(k, ttl - 1);
-        }
-
-        // Nettoyage des pièces au sol
-        drops = drops.filter(d => !(d.y >= H-2 && Math.random() < 0.035));
+        // Nettoyage des coins sortis du bas
+        drops = drops.filter(d => d.y < H-1);
 
         render();
+
+        frame++;
+        setTimeout(step, FRAME_MS);
+      } else {
+        // Build terminé: on efface tout coin résiduel et on affiche le mot final, puis STOP.
+        drops = [];
+        render();
       }
-      setTimeout(step, frameMs);
     }
 
     function render(){
       const buf = Array.from({length:H}, ()=>Array(W).fill(" "));
 
-      // Sol
-      for (let x=0;x<W;x++) buf[H-1][x] = "=";
-
-      // Drops
+      // Coins en chute (derrière)
       for (const d of drops){
         const x = Math.round(d.x), y = Math.round(d.y);
-        if (y>=0 && y<H-1 && x>=0 && x<W) buf[y][x] = d.ch;
+        if (x>=0 && x<W && y>=0 && y<H){
+          buf[y][x] = d.ch;
+        }
       }
 
-      // BIDOUX en “pièces” (surcouche nette)
-      for (const p of targetMask){
-        const k = keyXY(p.x,p.y);
-        if (filled.has(k)) buf[p.y][p.x] = "$";
+      // Mot final (au premier plan) : pixels en "$"
+      for (const p of fillOrder){
+        if (filledSet.has(keyXY(p.x,p.y))){
+          buf[p.y][p.x] = "$";
+        }
       }
-
-      // Petit bandeau en haut
-      const label = "  $$$  BIDOUX  $$$  ";
-      for (let i=0;i<label.length && i<W;i++) buf[0][i] = label[i];
 
       screenEl.textContent = buf.map(r=>r.join("")).join("\n");
     }
 
-    // UI
-    function lock(){
-      localStorage.removeItem("coin_access");
-      window.location.href = "index.html";
-    }
-    document.getElementById("lock").addEventListener("click", lock);
-
-    document.getElementById("speedUp").addEventListener("click", () => frameMs = Math.max(25, frameMs - 10));
-    document.getElementById("speedDown").addEventListener("click", () => frameMs = Math.min(220, frameMs + 10));
-
-    document.getElementById("toggle").addEventListener("click", () => {
-      paused = !paused;
-      document.getElementById("toggle").textContent = paused ? "Reprendre" : "Pause";
-    });
-
-    document.getElementById("more").addEventListener("click", () => {
-      backgroundRain = Math.min(0.03, backgroundRain + 0.003);
-      targetRainBoost = Math.min(0.30, targetRainBoost + 0.02);
-    });
-    document.getElementById("less").addEventListener("click", () => {
-      backgroundRain = Math.max(0.002, backgroundRain - 0.003);
-      targetRainBoost = Math.max(0.08, targetRainBoost - 0.02);
-    });
-
     // Start
+    init();
     step();
   </script>
 </body>

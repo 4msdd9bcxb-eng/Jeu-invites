@@ -5,7 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title></title>
   <style>
-    html, body { margin:0; height:100%; background:#000; overflow:hidden; }
+    html, body {
+      margin:0;
+      height:100%;
+      background:#000;
+      overflow:hidden;
+    }
     pre{
       margin:0;
       width:100%;
@@ -25,190 +30,189 @@
   </style>
 </head>
 <body>
-  <pre id="screen"></pre>
+<pre id="screen"></pre>
 
-  <script>
-    if (localStorage.getItem("coin_access") !== "ok") {
-      window.location.href = "index.html";
-    }
+<script>
+/* ===== Accès ===== */
+if (localStorage.getItem("coin_access") !== "ok") {
+  window.location.href = "index.html";
+}
 
-    const screenEl = document.getElementById("screen");
+const screenEl = document.getElementById("screen");
 
-    // Dimensions “console” (mobile-first)
-    function computeSize(){
-      const W = Math.max(44, Math.min(76, Math.floor(window.innerWidth / 9)));
-      const H = Math.max(20, Math.min(34, Math.floor(window.innerHeight / 18)));
-      return {W, H};
-    }
-    let {W, H} = computeSize();
-    window.addEventListener("resize", ()=>{ ({W,H}=computeSize()); init(); });
+/* ===== Dimensions (mobile-first) ===== */
+function computeSize(){
+  const W = Math.max(44, Math.min(76, Math.floor(window.innerWidth / 9)));
+  const H = Math.max(20, Math.min(34, Math.floor(window.innerHeight / 18)));
+  return {W, H};
+}
+let {W, H} = computeSize();
+window.addEventListener("resize", ()=>{ ({W,H}=computeSize()); init(); });
 
-    // Police 7 lignes (avec U ✅)
-    const FONT = {
-      "B":[ "#### ","#   #","#   #","#### ","#   #","#   #","#### " ],
-      "I":[ "#####","  #  ","  #  ","  #  ","  #  ","  #  ","#####" ],
-      "D":[ "#### ","#   #","#   #","#   #","#   #","#   #","#### " ],
-      "O":[ " #### ","#    #","#    #","#    #","#    #","#    #"," #### " ],
-      "U":[ "#    #",
-           "#    #",
-           "#    #",
-           "#    #",
-           "#    #",
-           "#    #",
-           " #### " ],
-      " ":[ "  ","  ","  ","  ","  ","  ","  " ]
-    };
+/* ===== Police ASCII ===== */
+const FONT = {
+  "B":[ "#### ","#   #","#   #","#### ","#   #","#   #","#### " ],
+  "I":[ "#####","  #  ","  #  ","  #  ","  #  ","  #  ","#####" ],
+  "D":[ "#### ","#   #","#   #","#   #","#   #","#   #","#### " ],
+  "O":[ " #### ","#    #","#    #","#    #","#    #","#    #"," #### " ],
+  "U":[ "#    #",
+       "#    #",
+       "#    #",
+       "#    #",
+       "#    #",
+       "#    #",
+       " #### " ],
+  " ":[ "  ","  ","  ","  ","  ","  ","  " ]
+};
 
-    const WORD = "BIDOU";
-    const GLYPH_H = 7;
+const WORD = "BIDOU";
+const GLYPH_H = 7;
 
-    // Pièces
-    const coins = ["o","O","0","$","¢","*"];
-    const weights = [6,3,3,2,1,2];
-    function pickCoin(){
-      const sum = weights.reduce((a,b)=>a+b,0);
-      let r = Math.random()*sum;
-      for (let i=0;i<coins.length;i++){
-        r -= weights[i];
-        if (r<=0) return coins[i];
-      }
-      return "o";
-    }
+/* ===== Pièces ===== */
+const coins = ["o","O","0","$","¢","*"];
+const weights = [6,3,3,2,1,2];
+function pickCoin(){
+  const sum = weights.reduce((a,b)=>a+b,0);
+  let r = Math.random()*sum;
+  for (let i=0;i<coins.length;i++){
+    r -= weights[i];
+    if (r<=0) return coins[i];
+  }
+  return "o";
+}
 
-    // Animation: ~30s puis stop
-    const BUILD_SECONDS = 15;
-    const FRAME_MS = 60;
-    const TOTAL_FRAMES = Math.round((BUILD_SECONDS * 1000) / FRAME_MS);
+/* ===== Animation ===== */
+const BUILD_SECONDS = 15;
+const FRAME_MS = 60;
+const TOTAL_FRAMES = Math.round((BUILD_SECONDS * 1000) / FRAME_MS);
 
-    let frame = 0;
-    let drops = [];
-    let mask = [];
-    let fillOrder = [];
-    let filledSet = new Set();
-    let buildDone = false;
+let frame = 0;
+let drops = [];
+let mask = [];
+let fillOrder = [];
+let filledSet = new Set();
+let buildDone = false;
+
 const FINAL_MESSAGE = "Vas-y, déballe le prochain cadeau!";
 
-    const MAX_DROPS = 900;
-    let spawnRateBase = 0.004;
-    let spawnRateTarget = 0.18;
+const MAX_DROPS = 900;
+let spawnRateBase = 0.004;
+let spawnRateTarget = 0.18;
 
-    function keyXY(x,y){ return x + "," + y; }
+function keyXY(x,y){ return x + "," + y; }
 
-    function buildMask(){
-      // Si l’écran est étroit, on réduit l’espacement entre lettres (pour garantir BIDOU complet)
-      let charSp = 2;
+function buildMask(){
+  let charSp = 2;
 
-      const makeLines = (sp) => {
-        const lines = Array.from({length: GLYPH_H}, ()=>"");
-        for (const ch of WORD){
-          const g = FONT[ch] || FONT[" "];
-          for (let i=0;i<GLYPH_H;i++){
-            lines[i] += g[i] + " ".repeat(sp);
-          }
-        }
-        return lines;
-      };
-
-      let lines = makeLines(charSp);
-      while (lines[0].length > W && charSp > 0){
-        charSp--;
-        lines = makeLines(charSp);
-      }
-
-      const wordWidth = lines[0].length;
-      const left = Math.max(0, Math.floor((W - wordWidth)/2));
-      const top  = Math.max(2, Math.floor((H - GLYPH_H)/3));
-
-      mask = [];
-      for (let y=0;y<GLYPH_H;y++){
-        for (let x=0;x<lines[y].length;x++){
-          if (lines[y][x] === "#"){
-            const gx = left + x;
-            const gy = top + y;
-            if (gx>=0 && gx<W && gy>=0 && gy<H){
-              mask.push({x:gx, y:gy});
-            }
-          }
-        }
-      }
-
-      fillOrder = mask.slice().sort((a,b)=> (a.y-b.y) || (a.x-b.x));
-      filledSet = new Set();
-    }
-
-    function init(){
-      ({W,H}=computeSize());
-      frame = 0;
-      drops = [];
-      buildDone = false;
-      buildMask();
-      render();
-    }
-
-    function spawn(){
-      const targetFilledCount = Math.min(
-        fillOrder.length,
-        Math.floor((frame / TOTAL_FRAMES) * fillOrder.length)
-      );
-
-      for (let i=0;i<targetFilledCount;i++){
-        const p = fillOrder[i];
-        filledSet.add(keyXY(p.x,p.y));
-      }
-
-      if (frame >= TOTAL_FRAMES){
-        buildDone = true;
-        return;
-      }
-
-      for (let x=0; x<W; x++){
-        if (Math.random() < spawnRateBase){
-          drops.push({x, y:0, ch: pickCoin(), vy: 1.0 + Math.random()*0.6});
-        }
-      }
-
-      const t = frame / TOTAL_FRAMES;
-      const targetIntensity = spawnRateTarget * (1 - t) + 0.02;
-
-      const remaining = fillOrder.length - targetFilledCount;
-      const samples = Math.min(18, Math.max(6, Math.floor(remaining / 10)));
-
-      for (let s=0; s<samples; s++){
-        const idx = targetFilledCount + Math.floor(Math.random() * Math.max(1, remaining));
-        const p = fillOrder[Math.min(idx, fillOrder.length-1)];
-        if (Math.random() < targetIntensity){
-          drops.push({x: p.x, y:0, ch: pickCoin(), vy: 1.1 + Math.random()*0.7});
-        }
-      }
-
-      if (drops.length > MAX_DROPS) drops.splice(0, drops.length - MAX_DROPS);
-    }
-
-    function step(){
-      if (!buildDone){
-        spawn();
-
-        for (const d of drops){
-          d.y += d.vy;
-          if (d.y > H-1) d.y = H-1;
-        }
-
-        drops = drops.filter(d => d.y < H-1);
-
-        render();
-
-        frame++;
-        setTimeout(step, FRAME_MS);
-      } else {
-        drops = [];
-        render(); // affiche BIDOU final, puis stop
+  const makeLines = (sp) => {
+    const lines = Array.from({length: GLYPH_H}, ()=>"");
+    for (const ch of WORD){
+      const g = FONT[ch] || FONT[" "];
+      for (let i=0;i<GLYPH_H;i++){
+        lines[i] += g[i] + " ".repeat(sp);
       }
     }
+    return lines;
+  };
 
-    function render(){
+  let lines = makeLines(charSp);
+  while (lines[0].length > W && charSp > 0){
+    charSp--;
+    lines = makeLines(charSp);
+  }
+
+  const wordWidth = lines[0].length;
+  const left = Math.max(0, Math.floor((W - wordWidth)/2));
+  const top  = Math.max(2, Math.floor((H - GLYPH_H)/3));
+
+  mask = [];
+  for (let y=0;y<GLYPH_H;y++){
+    for (let x=0;x<lines[y].length;x++){
+      if (lines[y][x] === "#"){
+        const gx = left + x;
+        const gy = top + y;
+        if (gx>=0 && gx<W && gy>=0 && gy<H){
+          mask.push({x:gx, y:gy});
+        }
+      }
+    }
+  }
+
+  fillOrder = mask.slice().sort((a,b)=> (a.y-b.y) || (a.x-b.x));
+  filledSet = new Set();
+}
+
+function init(){
+  ({W,H}=computeSize());
+  frame = 0;
+  drops = [];
+  buildDone = false;
+  buildMask();
+  render();
+}
+
+function spawn(){
+  const targetFilledCount = Math.min(
+    fillOrder.length,
+    Math.floor((frame / TOTAL_FRAMES) * fillOrder.length)
+  );
+
+  for (let i=0;i<targetFilledCount;i++){
+    const p = fillOrder[i];
+    filledSet.add(keyXY(p.x,p.y));
+  }
+
+  if (frame >= TOTAL_FRAMES){
+    buildDone = true;
+    return;
+  }
+
+  for (let x=0; x<W; x++){
+    if (Math.random() < spawnRateBase){
+      drops.push({x, y:0, ch: pickCoin(), vy: 1.0 + Math.random()*0.6});
+    }
+  }
+
+  const t = frame / TOTAL_FRAMES;
+  const targetIntensity = spawnRateTarget * (1 - t) + 0.02;
+
+  const remaining = fillOrder.length - targetFilledCount;
+  const samples = Math.min(18, Math.max(6, Math.floor(remaining / 10)));
+
+  for (let s=0; s<samples; s++){
+    const idx = targetFilledCount + Math.floor(Math.random() * Math.max(1, remaining));
+    const p = fillOrder[Math.min(idx, fillOrder.length-1)];
+    if (Math.random() < targetIntensity){
+      drops.push({x: p.x, y:0, ch: pickCoin(), vy: 1.1 + Math.random()*0.7});
+    }
+  }
+
+  if (drops.length > MAX_DROPS) drops.splice(0, drops.length - MAX_DROPS);
+}
+
+function step(){
+  if (!buildDone){
+    spawn();
+
+    for (const d of drops){
+      d.y += d.vy;
+      if (d.y > H-1) d.y = H-1;
+    }
+
+    drops = drops.filter(d => d.y < H-1);
+
+    render();
+    frame++;
+    setTimeout(step, FRAME_MS);
+  } else {
+    drops = [];
+    render(); // affichage final figé
+  }
+}
+
+function render(){
   const buf = Array.from({length:H}, ()=>Array(W).fill(" "));
 
-  // Coins en chute (derrière)
   for (const d of drops){
     const x = Math.round(d.x), y = Math.round(d.y);
     if (x>=0 && x<W && y>=0 && y<H){
@@ -216,35 +220,27 @@ const FINAL_MESSAGE = "Vas-y, déballe le prochain cadeau!";
     }
   }
 
-  // Mot BIDOU (au premier plan)
   for (const p of fillOrder){
     if (filledSet.has(keyXY(p.x,p.y))){
       buf[p.y][p.x] = "$";
     }
   }
 
-  // 👉 MESSAGE FINAL (SEULEMENT À LA FIN)
   if (buildDone){
     const msg = FINAL_MESSAGE;
-    const msgY = Math.min(H - 2, Math.max(0, Math.floor(
-      Math.max(...fillOrder.map(p => p.y)) + 2
-    )));
-    const msgX = Math.max(0, Math.floor((W - msg.length) / 2));
-
-    for (let i=0; i<msg.length && msgX + i < W; i++){
-      buf[msgY][msgX + i] = msg[i];
+    const maxY = Math.max(...fillOrder.map(p => p.y));
+    const y = Math.min(H-2, maxY + 2);
+    const x = Math.max(0, Math.floor((W - msg.length)/2));
+    for (let i=0;i<msg.length && x+i < W;i++){
+      buf[y][x+i] = msg[i];
     }
   }
 
   screenEl.textContent = buf.map(r=>r.join("")).join("\n");
 }
 
-
-      screenEl.textContent = buf.map(r=>r.join("")).join("\n");
-    }
-
-    init();
-    step();
-  </script>
+init();
+step();
+</script>
 </body>
 </html>

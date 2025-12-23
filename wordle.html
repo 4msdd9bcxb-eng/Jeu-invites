@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Wordle – Invités</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial; background:#0b1220; color:#eaf0ff; margin:0; padding:18px; display:flex; justify-content:center;}
+    .wrap{width:min(520px,96vw);}
+    header{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px;}
+    h1{font-size:18px; margin:0;}
+    .btn{border:1px solid #2a3c6b; background:#111a2e; color:#eaf0ff; padding:8px 10px; border-radius:10px; cursor:pointer;}
+    .btn:hover{filter:brightness(1.05)}
+    .grid{display:grid; grid-template-rows: repeat(6, 1fr); gap:8px; margin:14px 0;}
+    .row{display:grid; grid-template-columns: repeat(5, 1fr); gap:8px;}
+    .cell{
+      height:52px; display:grid; place-items:center;
+      border-radius:12px; border:1px solid #2a3c6b;
+      background:#0b1220; font-weight:700; font-size:20px;
+      text-transform:uppercase;
+    }
+    .cell.filled{background:#111a2e;}
+    .cell.g{background:#1f8a4c; border-color:#1f8a4c;}
+    .cell.y{background:#b08a1a; border-color:#b08a1a;}
+    .cell.b{background:#24314f; border-color:#24314f; opacity:.9;}
+    .keyboard{display:grid; gap:8px; margin-top:10px;}
+    .kbrow{display:flex; gap:6px; justify-content:center; flex-wrap:wrap;}
+    .key{
+      min-width:34px; padding:10px 10px; border-radius:10px;
+      border:1px solid #2a3c6b; background:#111a2e; color:#eaf0ff;
+      cursor:pointer; font-weight:650; user-select:none;
+      text-transform:uppercase;
+    }
+    .key.big{min-width:74px;}
+    .key.g{background:#1f8a4c; border-color:#1f8a4c;}
+    .key.y{background:#b08a1a; border-color:#b08a1a;}
+    .key.b{background:#24314f; border-color:#24314f;}
+    .bar{margin-top:10px; min-height:24px; opacity:.95}
+    .small{opacity:.75; font-size:12px; margin-top:10px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Wordle des invités 🎄</h1>
+      <div style="display:flex; gap:8px;">
+        <button class="btn" id="reset">Recommencer</button>
+        <button class="btn" id="lock">Verrouiller</button>
+      </div>
+    </header>
+
+    <div class="grid" id="grid"></div>
+    <div class="bar" id="bar"></div>
+
+    <div class="keyboard" id="kb"></div>
+    <div class="small">Règle : 6 essais, 5 lettres. Vert = bien placé, Jaune = présent, Gris = absent.</div>
+  </div>
+
+  <script>
+    // ✅ Mini "contrôle d'accès" côté navigateur
+    if (localStorage.getItem("wordle_access") !== "ok") {
+      window.location.href = "index.html";
+    }
+
+    // ✅ CHANGE ICI LE MOT (5 lettres) — sans accents pour simplifier
+    const SECRET = "bidou"; // exemple (tu peux mettre SAPIN, RENNE, NEIGE, etc.)
+
+    // ✅ Optionnel : petite liste pour valider les mots tapés (sinon, on accepte tout)
+    //const WORDLIST = new Set([
+    //  "SAPIN","RENNE","NEIGE","NOELX","HIVER","CLOCHE","BOUGIE","CADEA","FETES","HOUXX"
+    //]);
+
+    const ROWS = 6, COLS = 5;
+    let r = 0, c = 0;
+    let done = false;
+
+    const bar = document.getElementById("bar");
+    const grid = document.getElementById("grid");
+    const kb = document.getElementById("kb");
+
+    const state = Array.from({length: ROWS}, () => Array(COLS).fill(""));
+    const cells = [];
+
+    function say(t){ bar.textContent = t; }
+    function norm(ch){
+      // enlève accents si besoin
+      return ch.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    }
+
+    function buildGrid(){
+      grid.innerHTML = "";
+      cells.length = 0;
+      for (let i=0;i<ROWS;i++){
+        const row = document.createElement("div");
+        row.className = "row";
+        const rowCells = [];
+        for (let j=0;j<COLS;j++){
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          row.appendChild(cell);
+          rowCells.push(cell);
+        }
+        grid.appendChild(row);
+        cells.push(rowCells);
+      }
+    }
+
+    const KEYS = [
+      ["A","Z","E","R","T","Y","U","I","O","P"],
+      ["Q","S","D","F","G","H","J","K","L","M"],
+      ["ENTER","W","X","C","V","B","N","BACK"]
+    ];
+
+    const keyEls = new Map();
+
+    function buildKB(){
+      kb.innerHTML = "";
+      KEYS.forEach(rowKeys=>{
+        const row = document.createElement("div");
+        row.className = "kbrow";
+        rowKeys.forEach(k=>{
+          const b = document.createElement("div");
+          b.className = "key" + ((k==="ENTER"||k==="BACK") ? " big" : "");
+          b.textContent = (k==="BACK") ? "⌫" : k;
+          b.addEventListener("click", ()=> press(k));
+          row.appendChild(b);
+          keyEls.set(k, b);
+        });
+        kb.appendChild(row);
+      });
+    }
+
+    function paintCell(i,j){
+      const v = state[i][j];
+      const el = cells[i][j];
+      el.textContent = v;
+      el.classList.toggle("filled", v !== "");
+    }
+
+    function press(k){
+      if (done) return;
+      if (k === "BACK"){
+        if (c>0){ c--; state[r][c]=""; paintCell(r,c); }
+        return;
+      }
+      if (k === "ENTER"){
+        submit();
+        return;
+      }
+      if (/^[A-Z]$/.test(k)){
+        if (c < COLS){
+          state[r][c] = k;
+          paintCell(r,c);
+          c++;
+        }
+      }
+    }
+
+    function submit(){
+      if (c < COLS){ say("Entre 5 lettres."); return; }
+      const guess = state[r].join("");
+
+      // Si tu veux forcer des vrais mots, active cette validation:
+      // if (!WORDLIST.has(guess)) { say("Mot non reconnu."); return; }
+
+      const secret = SECRET;
+      const res = Array(COLS).fill("b");
+      const used = Array(COLS).fill(false);
+
+      // verts
+      for (let i=0;i<COLS;i++){
+        if (guess[i] === secret[i]){
+          res[i] = "g";
+          used[i] = true;
+        }
+      }
+      // jaunes
+      for (let i=0;i<COLS;i++){
+        if (res[i] === "g") continue;
+        for (let j=0;j<COLS;j++){
+          if (!used[j] && guess[i] === secret[j]){
+            res[i] = "y";
+            used[j] = true;
+            break;
+          }
+        }
+      }
+
+      // applique couleurs
+      for (let i=0;i<COLS;i++){
+        const cell = cells[r][i];
+        cell.classList.add(res[i]);
+
+        const key = keyEls.get(guess[i]);
+        if (key){
+          // priorité: g > y > b
+          if (res[i] === "g") { key.classList.remove("y","b"); key.classList.add("g"); }
+          else if (res[i] === "y" && !key.classList.contains("g")) { key.classList.remove("b"); key.classList.add("y"); }
+          else if (res[i] === "b" && !key.classList.contains("g") && !key.classList.contains("y")) { key.classList.add("b"); }
+        }
+      }
+
+      if (guess === secret){
+        done = true;
+        say("🎉 Bravo! Mot trouvé.");
+        return;
+      }
+
+      r++;
+      c=0;
+      if (r >= ROWS){
+        done = true;
+        say("😅 Terminé! Le mot était : " + secret);
+      } else {
+        say("Essai " + (r+1) + "/6");
+      }
+    }
+
+    function reset(){
+      done=false; r=0; c=0;
+      for (let i=0;i<ROWS;i++){
+        for (let j=0;j<COLS;j++){
+          state[i][j]="";
+          cells[i][j].className="cell";
+          paintCell(i,j);
+        }
+      }
+      // reset clavier
+      for (const el of keyEls.values()){
+        el.classList.remove("g","y","b");
+      }
+      say("Essai 1/6");
+    }
+
+    document.getElementById("reset").addEventListener("click", reset);
+    document.getElementById("lock").addEventListener("click", ()=>{
+      localStorage.removeItem("wordle_access");
+      window.location.href = "index.html";
+    });
+
+    window.addEventListener("keydown", (e)=>{
+      let k = e.key;
+      if (k === "Backspace") return press("BACK");
+      if (k === "Enter") return press("ENTER");
+      if (k.length === 1 && /[a-zA-Z]/.test(k)) return press(norm(k));
+    });
+
+    // init
+    buildGrid();
+    buildKB();
+    reset();
+  </script>
+</body>
+</html>

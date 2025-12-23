@@ -3,201 +3,276 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pluie de sous</title>
+  <title>BIDOUX – Pluie de sous</title>
   <style>
+    :root{
+      --bg:#0b1220; --panel:#111a2e; --line:#223055; --ink:#eaf0ff; --btn:#0b1220; --btnLine:#2a3c6b;
+    }
     body{
-      margin:0; background:#0b1220; color:#eaf0ff;
+      margin:0; background:var(--bg); color:var(--ink);
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
       min-height:100vh; display:flex; flex-direction:column;
     }
     header{
-      padding:12px 14px; display:flex; gap:10px; align-items:center; justify-content:space-between;
-      border-bottom:1px solid #223055; background:#111a2e;
+      padding:12px; display:flex; flex-direction:column; gap:10px;
+      border-bottom:1px solid var(--line); background:var(--panel);
     }
-    .title{font-weight:700}
+    .top{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .title{font-weight:800; font-size:15px;}
+    .controls{
+      display:flex; gap:8px; flex-wrap:wrap;
+    }
     .btn{
-      border:1px solid #2a3c6b; background:#0b1220; color:#eaf0ff;
-      padding:8px 10px; border-radius:10px; cursor:pointer;
+      border:1px solid var(--btnLine); background:var(--btn); color:var(--ink);
+      padding:10px 12px; border-radius:12px; cursor:pointer;
+      font-weight:700; font-size:14px;
+      -webkit-tap-highlight-color: transparent;
     }
-    .btn:hover{filter:brightness(1.08)}
+    .btn:active{transform:scale(.98)}
     .wrap{flex:1; display:flex; align-items:stretch; justify-content:center; padding:10px;}
     pre{
-      margin:0; width:min(900px, 96vw);
-      background:#0b1220; border:1px solid #223055; border-radius:14px;
-      padding:12px; line-height:1.05; font-size:14px; overflow:hidden;
-      box-shadow:0 10px 30px rgba(0,0,0,.35);
+      margin:0; width:100%;
+      max-width: 720px;
+      border:1px solid var(--line); border-radius:14px;
+      padding:12px;
+      line-height:1.05;
+      font-size: 16px;      /* 👈 mobile-first */
+      overflow:hidden;
       white-space:pre;
       user-select:none;
+      box-shadow:0 10px 30px rgba(0,0,0,.35);
     }
-    .hint{opacity:.7; font-size:12px; padding:0 14px 12px;}
+    .hint{
+      opacity:.7; font-size:12px; padding:0 12px 12px;
+    }
   </style>
 </head>
 <body>
   <header>
-    <div class="title">💰 Pluie de sous (ASCII)</div>
-    <div style="display:flex; gap:8px;">
+    <div class="top">
+      <div class="title">💰 BIDOUX (pluie de sous)</div>
+      <button class="btn" id="lock">Verrouiller</button>
+    </div>
+    <div class="controls">
       <button class="btn" id="speedDown">- vitesse</button>
       <button class="btn" id="speedUp">+ vitesse</button>
-      <button class="btn" id="reset">Reset</button>
-      <button class="btn" id="lock">Verrouiller</button>
+      <button class="btn" id="toggle">Pause</button>
+      <button class="btn" id="less">Moins</button>
+      <button class="btn" id="more">Plus</button>
     </div>
   </header>
 
   <div class="wrap">
     <pre id="screen"></pre>
   </div>
-  <div class="hint">Touches: ↑/↓ vitesse, R reset, Esc verrouiller. (Animation continue)</div>
+  <div class="hint">Mobile-first : lisible sur iPhone. (Boutons seulement, pas besoin de clavier)</div>
 
   <script>
-    // Mini “contrôle d’accès” côté navigateur
+    // Accès (statique, côté navigateur)
     if (localStorage.getItem("coin_access") !== "ok") {
       window.location.href = "index.html";
     }
 
-    // --- Paramètres ---
     const screenEl = document.getElementById("screen");
 
-    // Taille auto selon largeur du <pre> : on part sur une valeur fixe fiable,
-    // et on adapte un peu au viewport.
-    let W = Math.max(40, Math.min(90, Math.floor(window.innerWidth / 10)));
-    let H = Math.max(18, Math.min(32, Math.floor((window.innerHeight - 140) / 18)));
+    // 👇 Mobile-first : on limite volontairement la largeur en caractères
+    function computeSize(){
+      // largeur en "caractères" approximée à partir du viewport
+      const wChars = Math.max(44, Math.min(70, Math.floor(window.innerWidth / 9))); // iPhone ≈ 44-52
+      const hLines = Math.max(20, Math.min(32, Math.floor((window.innerHeight - 180) / 18)));
+      return {W:wChars, H:hLines};
+    }
+    let {W,H} = computeSize();
+    window.addEventListener("resize", ()=>{ ({W,H}=computeSize()); rebuild(); });
 
-    // “Sol”
-    const groundChar = "=";
-
-    // Pièces ASCII (un caractère)
-    const coins = ["o","O","0","°","*","¢","$"];
-    // Probabilités (plus de 'o' que de '$')
-    const coinWeights = [6, 3, 3, 2, 2, 2, 1];
-
+    // Pièces (simples, très lisibles)
+    const coins = ["o","O","0","$","¢"];
+    const weights = [6,3,3,2,1];
     function pickCoin(){
-      const sum = coinWeights.reduce((a,b)=>a+b,0);
-      let r = Math.random() * sum;
+      const sum = weights.reduce((a,b)=>a+b,0);
+      let r = Math.random()*sum;
       for (let i=0;i<coins.length;i++){
-        r -= coinWeights[i];
-        if (r <= 0) return coins[i];
+        r -= weights[i];
+        if (r<=0) return coins[i];
       }
       return "o";
     }
 
-    // Particules: {x, y, ch, vx, vy}
-    let drops = [];
+    // Police 7 lignes : BIDOUX (pixels)
+    const FONT = {
+      "B":[ "#### ","#   #","#   #","#### ","#   #","#   #","#### " ],
+      "I":[ "#####","  #  ","  #  ","  #  ","  #  ","  #  ","#####" ],
+      "D":[ "#### ","#   #","#   #","#   #","#   #","#   #","#### " ],
+      "O":[ " #### ","#    #","#    #","#    #","#    #","#    #"," #### " ],
+      "U":[ "#   #","#   #","#   #","#   #","#   #","#   #"," ### " ],
+      "X":[ "#   #"," # # ","  #  ","  #  ","  #  "," # # ","#   #" ],
+      " ":[ "  ","  ","  ","  ","  ","  ","  " ]
+    };
+    const WORD = "BIDOUX";
+    const CHAR_SP = 2;
+    const targetHeight = 7;
 
-    // Vitesse (ms par frame)
-    let frameMs = 70;
+    let targetMask = [];
+    let targetCols = [];
+    let filled = new Map(); // "x,y" -> ttl
+    const keyXY = (x,y)=>x+","+y;
 
-    // Pour créer un “flux”
-    let spawnRate = 0.22; // probabilité par colonne, par frame (approx)
-    let wind = 0.05;      // petite dérive horizontale
+    // Animation
+    let drops = []; // {x,y,ch,vy}
+    let frameMs = 85;          // 👈 mobile-first : un peu plus lent, plus stable
+    let paused = false;
 
-    function resize(){
-      W = Math.max(40, Math.min(100, Math.floor(window.innerWidth / 9)));
-      H = Math.max(18, Math.min(36, Math.floor((window.innerHeight - 140) / 17)));
-    }
-    window.addEventListener("resize", () => { resize(); });
+    // Intensités (ajustables par boutons)
+    let backgroundRain = 0.010; // léger
+    let targetRainBoost = 0.18; // fort sur le mot
 
-    function reset(){
-      drops = [];
-    }
-
-    function lock(){
-      localStorage.removeItem("coin_access");
-      window.location.href = "index.html";
-    }
-
-    // UI buttons
-    document.getElementById("reset").addEventListener("click", reset);
-    document.getElementById("lock").addEventListener("click", lock);
-    document.getElementById("speedUp").addEventListener("click", () => frameMs = Math.max(20, frameMs - 10));
-    document.getElementById("speedDown").addEventListener("click", () => frameMs = Math.min(200, frameMs + 10));
-
-    // Keyboard shortcuts
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "ArrowUp") frameMs = Math.max(20, frameMs - 10);
-      if (e.key === "ArrowDown") frameMs = Math.min(200, frameMs + 10);
-      if (e.key.toLowerCase() === "r") reset();
-      if (e.key === "Escape") lock();
-    });
-
-    function spawn(){
-      // On tente de faire tomber des pièces depuis le haut.
-      for (let x=0; x<W; x++){
-        if (Math.random() < spawnRate){
-          drops.push({
-            x,
-            y: 0,
-            ch: pickCoin(),
-            vx: (Math.random() - 0.5) * wind,
-            vy: 0.9 + Math.random()*0.7
-          });
+    function buildMask(){
+      const lines = Array.from({length: targetHeight}, ()=>"");
+      for (const ch of WORD){
+        const g = FONT[ch];
+        for (let i=0;i<targetHeight;i++){
+          lines[i] += g[i] + " ".repeat(CHAR_SP);
         }
       }
-      // Evite une croissance infinie
-      if (drops.length > 1500) drops.splice(0, drops.length - 1500);
+      const wordWidth = lines[0].length;
+
+      const targetLeft = Math.max(0, Math.floor((W - wordWidth)/2));
+      const targetTop  = Math.max(2, Math.floor((H - targetHeight)/3));
+
+      targetMask = [];
+      const colsSet = new Set();
+
+      for (let y=0;y<targetHeight;y++){
+        for (let x=0;x<lines[y].length;x++){
+          if (lines[y][x] === "#"){
+            const gx = targetLeft + x;
+            const gy = targetTop + y;
+            if (gx>=0 && gx<W && gy>=0 && gy<H-1){
+              targetMask.push({x:gx, y:gy});
+              colsSet.add(gx);
+            }
+          }
+        }
+      }
+      targetCols = [...colsSet];
+    }
+
+    function rebuild(){
+      drops = [];
+      filled.clear();
+      buildMask();
+    }
+    rebuild();
+
+    function spawn(){
+      // Fond
+      for (let x=0;x<W;x++){
+        if (Math.random() < backgroundRain){
+          drops.push({x, y:0, ch: pickCoin(), vy: 0.95 + Math.random()*0.55});
+        }
+      }
+      // Colonnes du mot
+      for (const x of targetCols){
+        if (Math.random() < targetRainBoost){
+          drops.push({x, y:0, ch: pickCoin(), vy: 1.00 + Math.random()*0.70});
+        }
+      }
+      if (drops.length > 1200) drops.splice(0, drops.length - 1200);
     }
 
     function step(){
-      spawn();
+      if (!paused){
+        spawn();
 
-      // Mise à jour
-      for (const d of drops){
-        d.vx += (Math.random() - 0.5) * wind * 0.2;
-        d.x += d.vx;
-        d.y += d.vy;
-
-        // rebond léger sur les murs
-        if (d.x < 0){ d.x = 0; d.vx *= -0.6; }
-        if (d.x > W-1){ d.x = W-1; d.vx *= -0.6; }
-
-        // sol
-        if (d.y > H-2){
-          d.y = H-2;
-          d.vy *= -0.15;     // petit rebond
-          d.vx *= 0.75;
-          // finit par “se calmer”
-          if (Math.abs(d.vy) < 0.05) d.vy = 0;
+        for (const d of drops){
+          d.y += d.vy;
+          if (d.y > H-2){
+            d.y = H-2;
+            d.vy = 0;
+          }
+          // Si ça passe sur un pixel du mot, on “allume” ce pixel
+          const x = Math.round(d.x);
+          const y = Math.round(d.y);
+          const k = keyXY(x,y);
+          // On ne check que si on est dans la zone (simple et rapide)
+          if (filled.has(k) || false){
+            // déjà allumé -> rallume
+            filled.set(k, 14);
+          }
         }
+
+        // Garantit lisibilité : rallume quelques pixels aléatoires à chaque frame
+        for (let i=0;i<6;i++){
+          const p = targetMask[Math.floor(Math.random()*targetMask.length)];
+          filled.set(keyXY(p.x,p.y), 14 + (Math.random()*10|0));
+        }
+
+        // TTL
+        for (const [k, ttl] of filled){
+          if (ttl <= 1) filled.delete(k);
+          else filled.set(k, ttl - 1);
+        }
+
+        // Nettoyage des pièces au sol
+        drops = drops.filter(d => !(d.y >= H-2 && Math.random() < 0.035));
+
+        render();
       }
-
-      // Nettoyage des pièces quasi immobiles au sol (pour garder l’effet “continu”)
-      drops = drops.filter(d => !(d.y >= H-2 && Math.abs(d.vx) < 0.01 && Math.abs(d.vy) < 0.01 && Math.random() < 0.02));
-
-      render();
       setTimeout(step, frameMs);
     }
 
     function render(){
-      // Buffer
-      const buf = Array.from({length: H}, () => Array(W).fill(" "));
+      const buf = Array.from({length:H}, ()=>Array(W).fill(" "));
 
       // Sol
-      for (let x=0; x<W; x++) buf[H-1][x] = groundChar;
-
-      // “Tas” très simple : on accumule visuellement en densifiant la ligne au-dessus du sol
-      // (optionnel : laisse juste les pièces rebondir)
-      // Ici on ne conserve pas réellement, on dessine seulement les drops.
+      for (let x=0;x<W;x++) buf[H-1][x] = "=";
 
       // Drops
       for (const d of drops){
-        const x = Math.round(d.x);
-        const y = Math.round(d.y);
-        if (y >= 0 && y < H-1 && x >= 0 && x < W){
-          buf[y][x] = d.ch;
-        }
+        const x = Math.round(d.x), y = Math.round(d.y);
+        if (y>=0 && y<H-1 && x>=0 && x<W) buf[y][x] = d.ch;
       }
 
-      // Cadre titre en haut (petit bandeau)
-      const label = "  $$$  PILE DE SOUS  $$$  ";
-      for (let i=0; i<label.length && i<W; i++){
-        buf[0][i] = label[i];
+      // BIDOUX en “pièces” (surcouche nette)
+      for (const p of targetMask){
+        const k = keyXY(p.x,p.y);
+        if (filled.has(k)) buf[p.y][p.x] = "$";
       }
 
-      screenEl.textContent = buf.map(row => row.join("")).join("\n");
+      // Petit bandeau en haut
+      const label = "  $$$  BIDOUX  $$$  ";
+      for (let i=0;i<label.length && i<W;i++) buf[0][i] = label[i];
+
+      screenEl.textContent = buf.map(r=>r.join("")).join("\n");
     }
 
+    // UI
+    function lock(){
+      localStorage.removeItem("coin_access");
+      window.location.href = "index.html";
+    }
+    document.getElementById("lock").addEventListener("click", lock);
+
+    document.getElementById("speedUp").addEventListener("click", () => frameMs = Math.max(25, frameMs - 10));
+    document.getElementById("speedDown").addEventListener("click", () => frameMs = Math.min(220, frameMs + 10));
+
+    document.getElementById("toggle").addEventListener("click", () => {
+      paused = !paused;
+      document.getElementById("toggle").textContent = paused ? "Reprendre" : "Pause";
+    });
+
+    document.getElementById("more").addEventListener("click", () => {
+      backgroundRain = Math.min(0.03, backgroundRain + 0.003);
+      targetRainBoost = Math.min(0.30, targetRainBoost + 0.02);
+    });
+    document.getElementById("less").addEventListener("click", () => {
+      backgroundRain = Math.max(0.002, backgroundRain - 0.003);
+      targetRainBoost = Math.max(0.08, targetRainBoost - 0.02);
+    });
+
     // Start
-    resize();
-    reset();
     step();
   </script>
 </body>

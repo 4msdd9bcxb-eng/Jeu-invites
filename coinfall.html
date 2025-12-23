@@ -15,7 +15,7 @@
       color:#e6e6e6;
       background:#000;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size:16px;       /* lisible iPhone */
+      font-size:16px;
       line-height:1.05;
       white-space:pre;
       user-select:none;
@@ -28,36 +28,41 @@
   <pre id="screen"></pre>
 
   <script>
-    // Accès (statique côté navigateur)
     if (localStorage.getItem("coin_access") !== "ok") {
       window.location.href = "index.html";
     }
 
     const screenEl = document.getElementById("screen");
 
-    // --- Dimensions "console" (mobile-first) ---
+    // Dimensions “console” (mobile-first)
     function computeSize(){
-      const W = Math.max(44, Math.min(70, Math.floor(window.innerWidth / 9)));
+      const W = Math.max(44, Math.min(76, Math.floor(window.innerWidth / 9)));
       const H = Math.max(20, Math.min(34, Math.floor(window.innerHeight / 18)));
       return {W, H};
     }
     let {W, H} = computeSize();
     window.addEventListener("resize", ()=>{ ({W,H}=computeSize()); init(); });
 
-    // --- Mot à construire ---
-    // Police 7 lignes en pixels (#)
+    // Police 7 lignes (avec U ✅)
     const FONT = {
       "B":[ "#### ","#   #","#   #","#### ","#   #","#   #","#### " ],
       "I":[ "#####","  #  ","  #  ","  #  ","  #  ","  #  ","#####" ],
       "D":[ "#### ","#   #","#   #","#   #","#   #","#   #","#### " ],
       "O":[ " #### ","#    #","#    #","#    #","#    #","#    #"," #### " ],
+      "U":[ "#    #",
+           "#    #",
+           "#    #",
+           "#    #",
+           "#    #",
+           "#    #",
+           " #### " ],
       " ":[ "  ","  ","  ","  ","  ","  ","  " ]
     };
-    const WORD = "BIDOU";        // <-- BIDOU (comme demandé)
-    const CHAR_SP = 2;
+
+    const WORD = "BIDOU";
     const GLYPH_H = 7;
 
-    // --- Pièces ASCII ---
+    // Pièces
     const coins = ["o","O","0","$","¢","*"];
     const weights = [6,3,3,2,1,2];
     function pickCoin(){
@@ -70,36 +75,46 @@
       return "o";
     }
 
-    // --- Animation ---
-    // Objectif: construire sur ~30s, puis arrêter complètement.
+    // Animation: ~30s puis stop
     const BUILD_SECONDS = 30;
-    const FRAME_MS = 60;                      // ~16 fps
+    const FRAME_MS = 60;
     const TOTAL_FRAMES = Math.round((BUILD_SECONDS * 1000) / FRAME_MS);
 
     let frame = 0;
-    let drops = [];                           // {x,y,ch,vy}
-    let mask = [];                            // pixels à remplir: {x,y}
-    let fillOrder = [];                       // ordre de remplissage des pixels
-    let filledSet = new Set();                // "x,y" remplis
+    let drops = [];
+    let mask = [];
+    let fillOrder = [];
+    let filledSet = new Set();
     let buildDone = false;
 
-    // Réduit le “bruit” et la charge
     const MAX_DROPS = 900;
-    let spawnRateBase = 0.004;                // fond très léger
-    let spawnRateTarget = 0.18;               // pluie ciblée (diminue au fur et à mesure)
+    let spawnRateBase = 0.004;
+    let spawnRateTarget = 0.18;
 
     function keyXY(x,y){ return x + "," + y; }
 
     function buildMask(){
-      const lines = Array.from({length: GLYPH_H}, ()=>"");
-      for (const ch of WORD){
-        const g = FONT[ch] || FONT[" "];
-        for (let i=0;i<GLYPH_H;i++){
-          lines[i] += g[i] + " ".repeat(CHAR_SP);
-        }
-      }
-      const wordWidth = lines[0].length;
+      // Si l’écran est étroit, on réduit l’espacement entre lettres (pour garantir BIDOU complet)
+      let charSp = 2;
 
+      const makeLines = (sp) => {
+        const lines = Array.from({length: GLYPH_H}, ()=>"");
+        for (const ch of WORD){
+          const g = FONT[ch] || FONT[" "];
+          for (let i=0;i<GLYPH_H;i++){
+            lines[i] += g[i] + " ".repeat(sp);
+          }
+        }
+        return lines;
+      };
+
+      let lines = makeLines(charSp);
+      while (lines[0].length > W && charSp > 0){
+        charSp--;
+        lines = makeLines(charSp);
+      }
+
+      const wordWidth = lines[0].length;
       const left = Math.max(0, Math.floor((W - wordWidth)/2));
       const top  = Math.max(2, Math.floor((H - GLYPH_H)/3));
 
@@ -116,7 +131,6 @@
         }
       }
 
-      // Ordre de construction : de haut en bas, gauche à droite (plus "logique" visuellement)
       fillOrder = mask.slice().sort((a,b)=> (a.y-b.y) || (a.x-b.x));
       filledSet = new Set();
     }
@@ -127,41 +141,34 @@
       drops = [];
       buildDone = false;
       buildMask();
-      render(); // écran vide au départ
+      render();
     }
 
     function spawn(){
-      // Le mot se construit : on augmente progressivement le nombre de pixels remplis
       const targetFilledCount = Math.min(
         fillOrder.length,
         Math.floor((frame / TOTAL_FRAMES) * fillOrder.length)
       );
 
-      // Marque les pixels "construits"
       for (let i=0;i<targetFilledCount;i++){
         const p = fillOrder[i];
         filledSet.add(keyXY(p.x,p.y));
       }
 
-      // Si build terminé : stop total de la pluie
       if (frame >= TOTAL_FRAMES){
         buildDone = true;
         return;
       }
 
-      // Pluie légère de fond
       for (let x=0; x<W; x++){
         if (Math.random() < spawnRateBase){
           drops.push({x, y:0, ch: pickCoin(), vy: 1.0 + Math.random()*0.6});
         }
       }
 
-      // Pluie ciblée sur les colonnes des pixels non encore construits (accélère la perception)
-      // Plus on approche de la fin, plus on diminue la pluie.
       const t = frame / TOTAL_FRAMES;
-      const targetIntensity = spawnRateTarget * (1 - t) + 0.02; // décroît vers la fin
+      const targetIntensity = spawnRateTarget * (1 - t) + 0.02;
 
-      // On échantillonne quelques pixels pas encore remplis et on fait tomber des coins dans leurs colonnes
       const remaining = fillOrder.length - targetFilledCount;
       const samples = Math.min(18, Math.max(6, Math.floor(remaining / 10)));
 
@@ -180,13 +187,11 @@
       if (!buildDone){
         spawn();
 
-        // Avance les coins
         for (const d of drops){
           d.y += d.vy;
           if (d.y > H-1) d.y = H-1;
         }
 
-        // Nettoyage des coins sortis du bas
         drops = drops.filter(d => d.y < H-1);
 
         render();
@@ -194,16 +199,14 @@
         frame++;
         setTimeout(step, FRAME_MS);
       } else {
-        // Build terminé: on efface tout coin résiduel et on affiche le mot final, puis STOP.
         drops = [];
-        render();
+        render(); // affiche BIDOU final, puis stop
       }
     }
 
     function render(){
       const buf = Array.from({length:H}, ()=>Array(W).fill(" "));
 
-      // Coins en chute (derrière)
       for (const d of drops){
         const x = Math.round(d.x), y = Math.round(d.y);
         if (x>=0 && x<W && y>=0 && y<H){
@@ -211,7 +214,6 @@
         }
       }
 
-      // Mot final (au premier plan) : pixels en "$"
       for (const p of fillOrder){
         if (filledSet.has(keyXY(p.x,p.y))){
           buf[p.y][p.x] = "$";
@@ -221,7 +223,6 @@
       screenEl.textContent = buf.map(r=>r.join("")).join("\n");
     }
 
-    // Start
     init();
     step();
   </script>

@@ -89,7 +89,7 @@ let buildDone = false;
 
 const FINAL_MESSAGE_1 = "🎁 Joyeux Noel!🎁 
 const FINAL_MESSAGE_2 = " -> Nous vous aimons très fort! <-";
-const FINAL_MESSAGE_2 = "🎁 Votre cadeau est dans le sapin! 🎁";
+const FINAL_MESSAGE_3 = "🎁 Votre cadeau est dans le sapin! 🎁";
 
 const MAX_DROPS = 900;
 let spawnRateBase = 0.004;
@@ -229,12 +229,15 @@ function render(){
 
     const x1 = Math.max(0, Math.floor((W - FINAL_MESSAGE_1.length)/2));
     const x2 = Math.max(0, Math.floor((W - FINAL_MESSAGE_2.length)/2));
+    const x3 = Math.max(0, Math.floor((W - FINAL_MESSAGE_3.length)/2));
 
     for (let i=0;i<FINAL_MESSAGE_1.length && x1+i < W;i++){
       buf[y1][x1+i] = FINAL_MESSAGE_1[i];
     }
     for (let i=0;i<FINAL_MESSAGE_2.length && x2+i < W;i++){
       buf[y2][x2+i] = FINAL_MESSAGE_2[i];
+    for (let i=0;i<FINAL_MESSAGE_3.length && x3+i < W;i++){
+      buf[y3][x3+i] = FINAL_MESSAGE_3[i];
     }
   }
 

@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pluie de sous</title>
+  <style>
+    body{
+      margin:0; background:#0b1220; color:#eaf0ff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      min-height:100vh; display:flex; flex-direction:column;
+    }
+    header{
+      padding:12px 14px; display:flex; gap:10px; align-items:center; justify-content:space-between;
+      border-bottom:1px solid #223055; background:#111a2e;
+    }
+    .title{font-weight:700}
+    .btn{
+      border:1px solid #2a3c6b; background:#0b1220; color:#eaf0ff;
+      padding:8px 10px; border-radius:10px; cursor:pointer;
+    }
+    .btn:hover{filter:brightness(1.08)}
+    .wrap{flex:1; display:flex; align-items:stretch; justify-content:center; padding:10px;}
+    pre{
+      margin:0; width:min(900px, 96vw);
+      background:#0b1220; border:1px solid #223055; border-radius:14px;
+      padding:12px; line-height:1.05; font-size:14px; overflow:hidden;
+      box-shadow:0 10px 30px rgba(0,0,0,.35);
+      white-space:pre;
+      user-select:none;
+    }
+    .hint{opacity:.7; font-size:12px; padding:0 14px 12px;}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">💰 Pluie de sous (ASCII)</div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn" id="speedDown">- vitesse</button>
+      <button class="btn" id="speedUp">+ vitesse</button>
+      <button class="btn" id="reset">Reset</button>
+      <button class="btn" id="lock">Verrouiller</button>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <pre id="screen"></pre>
+  </div>
+  <div class="hint">Touches: ↑/↓ vitesse, R reset, Esc verrouiller. (Animation continue)</div>
+
+  <script>
+    // Mini “contrôle d’accès” côté navigateur
+    if (localStorage.getItem("coin_access") !== "ok") {
+      window.location.href = "index.html";
+    }
+
+    // --- Paramètres ---
+    const screenEl = document.getElementById("screen");
+
+    // Taille auto selon largeur du <pre> : on part sur une valeur fixe fiable,
+    // et on adapte un peu au viewport.
+    let W = Math.max(40, Math.min(90, Math.floor(window.innerWidth / 10)));
+    let H = Math.max(18, Math.min(32, Math.floor((window.innerHeight - 140) / 18)));
+
+    // “Sol”
+    const groundChar = "=";
+
+    // Pièces ASCII (un caractère)
+    const coins = ["o","O","0","°","*","¢","$"];
+    // Probabilités (plus de 'o' que de '$')
+    const coinWeights = [6, 3, 3, 2, 2, 2, 1];
+
+    function pickCoin(){
+      const sum = coinWeights.reduce((a,b)=>a+b,0);
+      let r = Math.random() * sum;
+      for (let i=0;i<coins.length;i++){
+        r -= coinWeights[i];
+        if (r <= 0) return coins[i];
+      }
+      return "o";
+    }
+
+    // Particules: {x, y, ch, vx, vy}
+    let drops = [];
+
+    // Vitesse (ms par frame)
+    let frameMs = 70;
+
+    // Pour créer un “flux”
+    let spawnRate = 0.22; // probabilité par colonne, par frame (approx)
+    let wind = 0.05;      // petite dérive horizontale
+
+    function resize(){
+      W = Math.max(40, Math.min(100, Math.floor(window.innerWidth / 9)));
+      H = Math.max(18, Math.min(36, Math.floor((window.innerHeight - 140) / 17)));
+    }
+    window.addEventListener("resize", () => { resize(); });
+
+    function reset(){
+      drops = [];
+    }
+
+    function lock(){
+      localStorage.removeItem("coin_access");
+      window.location.href = "index.html";
+    }
+
+    // UI buttons
+    document.getElementById("reset").addEventListener("click", reset);
+    document.getElementById("lock").addEventListener("click", lock);
+    document.getElementById("speedUp").addEventListener("click", () => frameMs = Math.max(20, frameMs - 10));
+    document.getElementById("speedDown").addEventListener("click", () => frameMs = Math.min(200, frameMs + 10));
+
+    // Keyboard shortcuts
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowUp") frameMs = Math.max(20, frameMs - 10);
+      if (e.key === "ArrowDown") frameMs = Math.min(200, frameMs + 10);
+      if (e.key.toLowerCase() === "r") reset();
+      if (e.key === "Escape") lock();
+    });
+
+    function spawn(){
+      // On tente de faire tomber des pièces depuis le haut.
+      for (let x=0; x<W; x++){
+        if (Math.random() < spawnRate){
+          drops.push({
+            x,
+            y: 0,
+            ch: pickCoin(),
+            vx: (Math.random() - 0.5) * wind,
+            vy: 0.9 + Math.random()*0.7
+          });
+        }
+      }
+      // Evite une croissance infinie
+      if (drops.length > 1500) drops.splice(0, drops.length - 1500);
+    }
+
+    function step(){
+      spawn();
+
+      // Mise à jour
+      for (const d of drops){
+        d.vx += (Math.random() - 0.5) * wind * 0.2;
+        d.x += d.vx;
+        d.y += d.vy;
+
+        // rebond léger sur les murs
+        if (d.x < 0){ d.x = 0; d.vx *= -0.6; }
+        if (d.x > W-1){ d.x = W-1; d.vx *= -0.6; }
+
+        // sol
+        if (d.y > H-2){
+          d.y = H-2;
+          d.vy *= -0.15;     // petit rebond
+          d.vx *= 0.75;
+          // finit par “se calmer”
+          if (Math.abs(d.vy) < 0.05) d.vy = 0;
+        }
+      }
+
+      // Nettoyage des pièces quasi immobiles au sol (pour garder l’effet “continu”)
+      drops = drops.filter(d => !(d.y >= H-2 && Math.abs(d.vx) < 0.01 && Math.abs(d.vy) < 0.01 && Math.random() < 0.02));
+
+      render();
+      setTimeout(step, frameMs);
+    }
+
+    function render(){
+      // Buffer
+      const buf = Array.from({length: H}, () => Array(W).fill(" "));
+
+      // Sol
+      for (let x=0; x<W; x++) buf[H-1][x] = groundChar;
+
+      // “Tas” très simple : on accumule visuellement en densifiant la ligne au-dessus du sol
+      // (optionnel : laisse juste les pièces rebondir)
+      // Ici on ne conserve pas réellement, on dessine seulement les drops.
+
+      // Drops
+      for (const d of drops){
+        const x = Math.round(d.x);
+        const y = Math.round(d.y);
+        if (y >= 0 && y < H-1 && x >= 0 && x < W){
+          buf[y][x] = d.ch;
+        }
+      }
+
+      // Cadre titre en haut (petit bandeau)
+      const label = "  $$$  PILE DE SOUS  $$$  ";
+      for (let i=0; i<label.length && i<W; i++){
+        buf[0][i] = label[i];
+      }
+
+      screenEl.textContent = buf.map(row => row.join("")).join("\n");
+    }
+
+    // Start
+    resize();
+    reset();
+    step();
+  </script>
+</body>
+</html>

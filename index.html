@@ -1,13 +1,9 @@
-// RESET MANUEL POUR L'ORGANISATEUR
-if (window.location.search.includes("reset")) {
-  localStorage.removeItem("coin_access");
-}
 <!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Accès au jeu</title>
+  <title>Accès</title>
   <style>
     body{font-family:system-ui,Segoe UI,Roboto,Arial; background:#0b1220; color:#eaf0ff; margin:0; min-height:100vh; display:grid; place-items:center;}
     .card{background:#111a2e; border:1px solid #223055; border-radius:16px; padding:24px; width:min(420px,92vw); box-shadow:0 10px 30px rgba(0,0,0,.35);}
@@ -32,12 +28,17 @@ if (window.location.search.includes("reset")) {
     </div>
 
     <div class="msg" id="msg"></div>
-    <div class="hint">Astuce : l’accès reste actif sur ce navigateur.</div>
+    <div class="hint">Astuce organisateur : ajoute <b>?reset</b> à l’URL pour revenir ici.</div>
   </div>
 
   <script>
-    // ✅ Mets ton code ici
-    const ACCESS_CODE = "1328";
+    // RESET MANUEL POUR L'ORGANISATEUR (ex: https://.../jeu-invites/?reset)
+    if (window.location.search.includes("reset")) {
+      localStorage.removeItem("coin_access");
+    }
+
+    // ✅ Mets ton code ici (4 chiffres)
+    const ACCESS_CODE = "1500";
 
     const $ = (id) => document.getElementById(id);
     const msg = $("msg");
@@ -50,7 +51,7 @@ if (window.location.search.includes("reset")) {
     $("go").addEventListener("click", () => {
       const v = $("code").value.trim();
       if (/^\d{4}$/.test(v) && v === ACCESS_CODE) {
-        msg.textContent = "✅ Code OK… pluie de sous incoming!";
+        msg.textContent = "✅ Code OK…";
         okAccess();
       } else {
         msg.textContent = "❌ Mauvais code. Réessaie 🙂";
@@ -61,7 +62,7 @@ if (window.location.search.includes("reset")) {
       if (e.key === "Enter") $("go").click();
     });
 
-    // Si déjà déverrouillé
+    // Si déjà déverrouillé, redirige automatiquement
     if (localStorage.getItem("coin_access") === "ok") {
       msg.textContent = "✅ Déjà déverrouillé. Redirection…";
       setTimeout(okAccess, 350);
@@ -69,3 +70,4 @@ if (window.location.search.includes("reset")) {
   </script>
 </body>
 </html>
+

@@ -20,7 +20,7 @@
 <body>
   <div class="card">
     <h1>Entre le code 🎁</h1>
-    <p>Code à 4 chiffres pour déverrouiller le Wordle.</p>
+    <p>Code à 4 chiffres pour déverrouiller l’animation.</p>
 
     <div class="row">
       <input id="code" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="one-time-code" />
@@ -28,25 +28,25 @@
     </div>
 
     <div class="msg" id="msg"></div>
-    <div class="hint">Astuce : si vous rafraîchissez, l’accès reste actif sur ce navigateur.</div>
+    <div class="hint">Astuce : l’accès reste actif sur ce navigateur.</div>
   </div>
 
   <script>
-    // ✅ CHANGE ICI TON CODE (4 chiffres)
+    // ✅ Mets ton code ici
     const ACCESS_CODE = "1328";
 
     const $ = (id) => document.getElementById(id);
     const msg = $("msg");
 
     function okAccess() {
-      localStorage.setItem("wordle_access", "ok");
-      window.location.href = "wordle.html";
+      localStorage.setItem("coin_access", "ok");
+      window.location.href = "coinfall.html";
     }
 
     $("go").addEventListener("click", () => {
       const v = $("code").value.trim();
       if (/^\d{4}$/.test(v) && v === ACCESS_CODE) {
-        msg.textContent = "✅ Code OK… direction le Wordle!";
+        msg.textContent = "✅ Code OK… pluie de sous incoming!";
         okAccess();
       } else {
         msg.textContent = "❌ Mauvais code. Réessaie 🙂";
@@ -58,11 +58,10 @@
     });
 
     // Si déjà déverrouillé
-    if (localStorage.getItem("wordle_access") === "ok") {
+    if (localStorage.getItem("coin_access") === "ok") {
       msg.textContent = "✅ Déjà déverrouillé. Redirection…";
-      setTimeout(() => okAccess(), 400);
+      setTimeout(okAccess, 350);
     }
   </script>
 </body>
 </html>
-

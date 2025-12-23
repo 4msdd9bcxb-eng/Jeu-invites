@@ -6,15 +6,16 @@
   <title>Accès</title>
   <style>
     body{font-family:system-ui,Segoe UI,Roboto,Arial; background:#0b1220; color:#eaf0ff; margin:0; min-height:100vh; display:grid; place-items:center;}
-    .card{background:#111a2e; border:1px solid #223055; border-radius:16px; padding:24px; width:min(420px,92vw); box-shadow:0 10px 30px rgba(0,0,0,.35);}
+    .card{background:#111a2e; border:1px solid #223055; border-radius:16px; padding:24px; width:min(460px,92vw); box-shadow:0 10px 30px rgba(0,0,0,.35);}
     h1{margin:0 0 10px; font-size:22px;}
     p{margin:0 0 14px; opacity:.9}
     .row{display:flex; gap:10px; margin-top:10px;}
     input{flex:1; font-size:18px; padding:12px 14px; border-radius:12px; border:1px solid #2a3c6b; background:#0b1220; color:#eaf0ff;}
     button{font-size:16px; padding:12px 14px; border-radius:12px; border:0; background:#4f7cff; color:white; cursor:pointer;}
     button:hover{filter:brightness(1.05)}
-    .msg{margin-top:12px; min-height:22px;}
-    .hint{opacity:.75; font-size:13px; margin-top:10px}
+    .msg{margin-top:12px; min-height:22px; font-weight:600;}
+    .hint{opacity:.75; font-size:13px; margin-top:10px; line-height:1.35}
+    code{background:#0b1220; padding:2px 6px; border-radius:6px; border:1px solid #2a3c6b;}
   </style>
 </head>
 <body>
@@ -28,26 +29,50 @@
     </div>
 
     <div class="msg" id="msg"></div>
-    <div class="hint">Astuce organisateur : ajoute <b>?reset</b> à l’URL pour revenir ici.</div>
+    <div class="hint">
+      Organisateur : ouvre <code>?reset=1</code> à la fin de l’URL pour forcer le retour ici (ex: <code>.../jeu-invites/?reset=1</code>).
+    </div>
   </div>
 
   <script>
-    // RESET MANUEL POUR L'ORGANISATEUR (ex: https://.../jeu-invites/?reset)
-    if (window.location.search.includes("reset")) {
-      localStorage.removeItem("coin_access");
-    }
-
     // ✅ Mets ton code ici (4 chiffres)
     const ACCESS_CODE = "1500";
 
     const $ = (id) => document.getElementById(id);
     const msg = $("msg");
 
+    // Détecte reset de façon robuste: ?reset, ?reset=1, ?reset=true, etc.
+    const params = new URLSearchParams(window.location.search);
+    const isReset = params.has("reset");
+
+    function clearAccess() {
+      // Efface toutes les clés possibles utilisées dans nos versions précédentes
+      localStorage.removeItem("coin_access");
+      localStorage.removeItem("wordle_access");
+      localStorage.removeItem("wordle_access_ok");
+      // Option "nuke" si jamais tu avais d'autres variantes:
+      // localStorage.clear();
+    }
+
     function okAccess() {
       localStorage.setItem("coin_access", "ok");
       window.location.href = "coinfall.html";
     }
 
+    // 1) Si reset demandé: on efface et on NE redirige PAS.
+    if (isReset) {
+      clearAccess();
+      msg.textContent = "✅ RESET OK — accès effacé. Tu peux entrer le code.";
+      // IMPORTANT: on stoppe ici pour empêcher toute redirection.
+    } else {
+      // 2) Sinon seulement, on redirige si déjà déverrouillé
+      if (localStorage.getItem("coin_access") === "ok") {
+        msg.textContent = "✅ Déjà déverrouillé. Redirection…";
+        setTimeout(okAccess, 250);
+      }
+    }
+
+    // Bouton Accéder
     $("go").addEventListener("click", () => {
       const v = $("code").value.trim();
       if (/^\d{4}$/.test(v) && v === ACCESS_CODE) {
@@ -58,16 +83,10 @@
       }
     });
 
+    // Enter pour valider
     $("code").addEventListener("keydown", (e) => {
       if (e.key === "Enter") $("go").click();
     });
-
-    // Si déjà déverrouillé, redirige automatiquement
-    if (localStorage.getItem("coin_access") === "ok") {
-      msg.textContent = "✅ Déjà déverrouillé. Redirection…";
-      setTimeout(okAccess, 350);
-    }
   </script>
 </body>
 </html>
-
